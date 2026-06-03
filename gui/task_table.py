@@ -1,99 +1,246 @@
 #!/usr/bin/env python3
-"""Task table with Treeview, scrollbars, and refresh logic."""
+"""Card-style task list with smooth scrolling."""
 
-from tkinter import Frame
-from tkinter.ttk import Scrollbar, Style, Treeview
+from tkinter import Canvas, Frame, Label, Scrollbar
 
-from gui.styles import PRIORITY_COLORS, PRIORITY_EMOJI
+import ttkbootstrap as ttk
+
+from gui.styles import (
+    BG,
+    FONT_BODY,
+    FONT_CAPTION,
+    FONT_FAMILY,
+    FONT_SMALL,
+    OVERDUE,
+    PRIORITY_BADGE,
+    SEPARATOR,
+    SUCCESS,
+    SURFACE,
+    TEXT,
+    TEXT_SECONDARY,
+)
 from todo.store import load_todos
 from todo.utils import is_overdue
 
 
 class TaskTable:
-    COLUMNS = ("status", "task", "priority", "due_date", "created")
+    def __init__(self, parent):
+        self._on_toggle = None
+        self._selected_id = None
+        self._frames = {}
 
-    def __init__(self, parent, on_toggle):
-        self._on_toggle = on_toggle
-        self._frame = Frame(parent)
-        self._frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # container
+        self._container = Frame(parent, bg=BG)
+        self._container.pack(fill="both", expand=True, padx=12, pady=(0, 8))
 
-        style = Style()
-        style.configure("Treeview", rowheight=40)
+        # card surface
+        self._card = Frame(self._container, bg=SURFACE)
+        self._card.pack(fill="both", expand=True)
 
-        self._tree = Treeview(
-            self._frame, columns=self.COLUMNS, show="headings", selectmode="extended"
+        # canvas + scrollbar
+        self._canvas = Canvas(
+            self._card,
+            bg=SURFACE,
+            highlightthickness=0,
+            relief="flat",
+        )
+        self._scrollbar = ttk.Scrollbar(
+            self._card, orient="vertical", command=self._canvas.yview
+        )
+        self._inner = Frame(self._canvas, bg=SURFACE)
+
+        self._canvas.configure(yscrollcommand=self._scrollbar.set)
+        self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
+
+        self._scrollbar.pack(side="right", fill="y")
+        self._canvas.pack(side="left", fill="both", expand=True)
+
+        # scrolling
+        self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self._canvas.bind_all("<Button-4>", self._on_mousewheel)
+        self._canvas.bind_all("<Button-5>", self._on_mousewheel)
+        self._inner.bind("<Configure>", lambda _e: self._update_scroll_region())
+
+    def set_toggle_callback(self, callback):
+        self._on_toggle = callback
+
+    # -- rendering ----------------------------------------------------------
+
+    def refresh(self):
+        # clear previous
+        for widget in self._inner.winfo_children():
+            widget.destroy()
+        self._frames.clear()
+        self._selected_id = None
+
+        todos = load_todos()
+
+        if not todos:
+            self._render_empty()
+            return todos
+
+        for idx, t in enumerate(todos):
+            self._render_task(t, idx)
+
+        self._update_scroll_region()
+        return todos
+
+    def _render_empty(self):
+        Label(
+            self._inner,
+            text="+",
+            font=(FONT_FAMILY, 48),
+            foreground=SEPARATOR,
+            bg=SURFACE,
+        ).pack(pady=(80, 16))
+        Label(
+            self._inner,
+            text="No tasks yet",
+            font=FONT_BODY,
+            foreground=TEXT_SECONDARY,
+            bg=SURFACE,
+        ).pack(pady=(0, 8))
+        Label(
+            self._inner,
+            text="Add a task above to get started",
+            font=FONT_CAPTION,
+            foreground=TEXT_SECONDARY,
+            bg=SURFACE,
+        ).pack(pady=(0, 60))
+
+    def _render_task(self, t, idx):
+        done = t["done"]
+        priority = t.get("priority", "medium")
+        due = t.get("due_date")
+        created = t.get("created", "")
+
+        badge = PRIORITY_BADGE.get(priority, PRIORITY_BADGE["medium"])
+
+        row = Frame(self._inner, bg=SURFACE, padx=16, pady=12)
+        row.pack(fill="x")
+
+        # separator (not on first row)
+        if idx > 0:
+            sep = Frame(self._inner, height=1, bg=SEPARATOR)
+            sep.pack(fill="x", padx=16)
+
+        # checkbox circle
+        check_color = SUCCESS if done else SEPARATOR
+        check_text = "✓" if done else ""
+        check = Label(
+            row,
+            text=check_text,
+            font=(FONT_FAMILY, 14),
+            foreground=check_color,
+            bg=SURFACE,
+            width=2,
+        )
+        check.pack(side="left", padx=(0, 12))
+
+        # task name + done strike-through
+        task_label = Label(
+            row,
+            text=t["text"],
+            font=(FONT_FAMILY, 13, "italic" if done else "normal"),
+            foreground=TEXT_SECONDARY if done else TEXT,
+            bg=SURFACE,
+            anchor="w",
+        )
+        task_label.pack(side="left", fill="x", expand=True, padx=(0, 12))
+
+        # priority badge
+        priority_label = Label(
+            row,
+            text=priority.capitalize(),
+            font=FONT_SMALL,
+            foreground=badge["fg"],
+            background=badge["bg"],
+            padx=8,
+            pady=2,
+        )
+        priority_label.pack(side="left", padx=(0, 8))
+
+        # due date
+        if due:
+            overdue = not done and is_overdue(due)
+            due_display = due
+            due_color = OVERDUE if overdue else TEXT_SECONDARY
+            if overdue:
+                due_display += "  ⚠"
+        else:
+            due_display = None
+            due_color = TEXT_SECONDARY
+
+        if due_display:
+            due_label = Label(
+                row,
+                text=due_display,
+                font=FONT_CAPTION,
+                foreground=due_color,
+                bg=SURFACE,
+            )
+            due_label.pack(side="left", padx=(0, 8))
+
+        # created
+        if created:
+            created_label = Label(
+                row,
+                text=created,
+                font=FONT_SMALL,
+                foreground=TEXT_SECONDARY,
+                bg=SURFACE,
+            )
+            created_label.pack(side="left")
+
+        # interactions
+        self._frames[t["id"]] = row
+        row.bind("<Enter>", lambda _e, r=row: self._on_hover(r, True))
+        row.bind("<Leave>", lambda _e, r=row: self._on_hover(r, False))
+        row.bind(
+            "<Double-Button-1>",
+            lambda _e, tid=t["id"]: self._on_toggle(tid) if self._on_toggle else None,
+        )
+        row.bind(
+            "<Button-1>",
+            lambda _e, tid=t["id"]: self._select_task(tid, row),
         )
 
-        self._tree.heading("status", text="✓")
-        self._tree.heading("task", text="Task")
-        self._tree.heading("priority", text="Priority")
-        self._tree.heading("due_date", text="Due Date")
-        self._tree.heading("created", text="Created")
+    # -- selection ----------------------------------------------------------
 
-        self._tree.column("status", width=50, anchor="center")
-        self._tree.column("task", width=500, anchor="w")
-        self._tree.column("priority", width=130, anchor="center")
-        self._tree.column("due_date", width=150, anchor="center")
-        self._tree.column("created", width=140, anchor="center")
-
-        v_scroll = Scrollbar(self._frame, orient="vertical", command=self._tree.yview)
-        h_scroll = Scrollbar(self._frame, orient="horizontal", command=self._tree.xview)
-        self._tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-
-        v_scroll.pack(side="right", fill="y")
-        h_scroll.pack(side="bottom", fill="x")
-        self._tree.pack(side="left", fill="both", expand=True)
-
-        for level, color in PRIORITY_COLORS.items():
-            self._tree.tag_configure(level, foreground=color)
-        self._tree.tag_configure("overdue", foreground=PRIORITY_COLORS["high"])
-
-        self._tree.bind(
-            "<Double-Button-1>", lambda _e: self._on_toggle(self.selected_id)
-        )
+    def _select_task(self, task_id, row):
+        if self._selected_id and self._selected_id in self._frames:
+            old = self._frames[self._selected_id]
+            old.config(bg=SURFACE)
+        self._selected_id = task_id
+        row.config(bg="#f0f4ff")
 
     @property
     def selected_id(self):
-        selected = self._tree.selection()
-        if not selected:
-            return None
-        try:
-            return int(selected[0])
-        except ValueError:
-            return None
+        return self._selected_id
 
-    def refresh(self):
-        for item in self._tree.get_children():
-            self._tree.delete(item)
+    def clear_selection(self):
+        if self._selected_id and self._selected_id in self._frames:
+            self._frames[self._selected_id].config(bg=SURFACE)
+        self._selected_id = None
 
-        todos = load_todos()
-        for t in todos:
-            status = "✓" if t["done"] else " "
-            priority = t.get("priority", "medium")
-            due = t.get("due_date")
-            created = t.get("created", "")
+    # -- hover --------------------------------------------------------------
 
-            priority_display = (
-                f"{PRIORITY_EMOJI.get(priority, '')} {priority.capitalize()}"
-            )
+    def _on_hover(self, row, entering):
+        if row == self._frames.get(self._selected_id):
+            return
+        row.config(bg="#fafafa" if entering else SURFACE)
 
-            if due:
-                overdue_str = " ⚠️ OVERDUE" if not t["done"] and is_overdue(due) else ""
-                due_display = f"{due}{overdue_str}"
-            else:
-                due_display = "-"
+    # -- scroll -------------------------------------------------------------
 
-            tag = "overdue" if (not t["done"] and is_overdue(due)) else priority
+    def _on_mousewheel(self, event):
+        if event.num == 4:
+            self._canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self._canvas.yview_scroll(1, "units")
+        elif event.num == 120:
+            self._canvas.yview_scroll(-1, "units")
+        elif event.num == 200:
+            self._canvas.yview_scroll(1, "units")
 
-            self._tree.insert(
-                "",
-                "end",
-                iid=str(t["id"]),
-                values=(status, t["text"], priority_display, due_display, created),
-                tags=(tag,),
-            )
-
-        return todos
-
-    def selection_set(self, iid):
-        self._tree.selection_set(str(iid))
+    def _update_scroll_region(self):
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))

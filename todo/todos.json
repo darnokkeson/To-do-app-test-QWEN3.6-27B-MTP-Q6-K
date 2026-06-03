@@ -2,7 +2,7 @@
   {
     "id": 2,
     "text": "Learn Python",
-    "done": false,
+    "done": true,
     "created": "2026-06-02 20:34",
     "priority": "medium",
     "due_date": null
@@ -18,7 +18,7 @@
   {
     "id": 4,
     "text": "Ship it",
-    "done": false,
+    "done": true,
     "created": "2026-06-02 20:34",
     "priority": "medium",
     "due_date": null

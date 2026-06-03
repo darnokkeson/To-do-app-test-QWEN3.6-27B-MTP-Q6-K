@@ -1,0 +1,32 @@
+[
+  {
+    "id": 2,
+    "text": "Learn Python",
+    "done": false,
+    "created": "2026-06-02 20:34"
+  },
+  {
+    "id": 3,
+    "text": "Build a project",
+    "done": false,
+    "created": "2026-06-02 20:34"
+  },
+  {
+    "id": 4,
+    "text": "Ship it",
+    "done": false,
+    "created": "2026-06-02 20:34"
+  },
+  {
+    "id": 5,
+    "text": "new",
+    "done": true,
+    "created": "2026-06-02 20:59"
+  },
+  {
+    "id": 6,
+    "text": "new",
+    "done": false,
+    "created": "2026-06-03 14:04"
+  }
+]

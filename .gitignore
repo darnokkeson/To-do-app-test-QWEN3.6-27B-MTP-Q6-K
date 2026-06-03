@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+todo/todos.json
+todo/gui_config.json

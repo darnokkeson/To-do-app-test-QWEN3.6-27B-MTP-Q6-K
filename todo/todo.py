@@ -1,56 +1,11 @@
 #!/usr/bin/env python3
 """Simple CLI To-Do List Manager with Priority and Due Dates"""
 
-import json
-import os
 import sys
 from datetime import datetime
 
-TODO_FILE = os.path.join(os.path.dirname(__file__), "todos.json")
-
-
-def load_todos():
-    if os.path.exists(TODO_FILE):
-        try:
-            with open(TODO_FILE, "r", encoding="utf-8") as f:
-                todos = json.load(f)
-            for t in todos:
-                t.setdefault("priority", "medium")
-                t.setdefault("due_date", None)
-            return todos
-        except (json.JSONDecodeError, OSError):
-            return []
-    return []
-
-
-def save_todos(todos):
-    os.makedirs(os.path.dirname(TODO_FILE), exist_ok=True)
-    with open(TODO_FILE, "w", encoding="utf-8") as f:
-        json.dump(todos, f, indent=2)
-
-
-def next_id(todos):
-    if not todos:
-        return 1
-    return max(t["id"] for t in todos) + 1
-
-
-def is_overdue(due_date):
-    if not due_date:
-        return False
-    try:
-        due_dt = datetime.strptime(due_date, "%Y-%m-%d")
-        return due_dt.date() < datetime.now().date()
-    except ValueError:
-        return False
-
-
-def validate_date(date_str):
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
+from todo.store import load_todos, next_id, save_todos
+from todo.utils import is_overdue, validate_date
 
 
 def add_todo(text, priority="medium", due_date=None):
@@ -106,7 +61,9 @@ def list_todos():
         if not t["done"] and is_overdue(due):
             overdue_tag = " ⚠️ OVERDUE"
 
-        print(f"{t['id']:<4} {status:<8} {priority:<10} {due:<14}{overdue_tag} {t['text']}")
+        print(
+            f"{t['id']:<4} {status:<8} {priority:<10} {due:<14}{overdue_tag} {t['text']}"
+        )
     print()
 
 
@@ -159,19 +116,25 @@ if __name__ == "__main__":
             list_todos()
         elif cmd == "add":
             if len(sys.argv) < 3:
-                print("Usage: python todo.py add <text> [--priority high|medium|low] [--due YYYY-MM-DD]")
+                print(
+                    "Usage: python todo.py add <text> [--priority high|medium|low] [--due YYYY-MM-DD]"
+                )
             else:
                 text, priority, due_date = parse_add_args(sys.argv[2:])
                 if not text:
                     print("Error: Task text is required.")
                 elif priority not in ("high", "medium", "low"):
-                    print(f"Error: Invalid priority '{priority}'. Use high, medium, or low.")
+                    print(
+                        f"Error: Invalid priority '{priority}'. Use high, medium, or low."
+                    )
                 elif due_date and not validate_date(due_date):
                     print("Error: Invalid date format. Use YYYY-MM-DD.")
                 else:
                     todo = add_todo(text, priority, due_date)
                     due_str = f", Due: {due_date}" if due_date else ""
-                    print(f'✓ Added: "{todo["text"]}" (Priority: {priority.capitalize()}{due_str})')
+                    print(
+                        f'✓ Added: "{todo["text"]}" (Priority: {priority.capitalize()}{due_str})'
+                    )
         elif cmd in ("done", "complete"):
             if len(sys.argv) < 3:
                 print("Usage: python todo.py done <id>")

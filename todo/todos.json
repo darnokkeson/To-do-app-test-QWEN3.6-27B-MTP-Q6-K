@@ -2,7 +2,7 @@
   {
     "id": 2,
     "text": "Learn Python",
-    "done": true,
+    "done": false,
     "created": "2026-06-02 20:34",
     "priority": "medium",
     "due_date": null
@@ -34,17 +34,9 @@
   {
     "id": 6,
     "text": "new",
-    "done": false,
+    "done": true,
     "created": "2026-06-03 14:04",
     "priority": "medium",
     "due_date": null
-  },
-  {
-    "id": 7,
-    "text": "test",
-    "done": false,
-    "created": "2026-06-03 15:02",
-    "priority": "high",
-    "due_date": "2025-06-05"
   }
 ]

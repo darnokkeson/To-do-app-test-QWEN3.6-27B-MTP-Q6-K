@@ -4,10 +4,11 @@
 import json
 import os
 from datetime import datetime
-from tkinter import Button, Entry, Frame, StringVar, Tk, messagebox
-from tkinter import ttk
+from tkinter import Button, Entry, Frame, StringVar, Tk, messagebox, ttk
+from tkinter.ttk import Style
 
 TODO_FILE = os.path.join(os.path.dirname(__file__), "..", "todo", "todos.json")
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "todo", "gui_config.json")
 
 PRIORITY_EMOJI = {"high": "🔴", "medium": "🟠", "low": "🟢"}
 PRIORITY_COLORS = {"high": "#f38ba8", "medium": "#fab387", "low": "#a6e3a1"}
@@ -59,11 +60,46 @@ def validate_date(date_str):
         return False
 
 
+def load_geometry():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            geom = config.get("geometry", "")
+            # Validate geometry string (e.g., "1050x500+100+200")
+            parts = geom.split("+")
+            size = parts[0].split("x")
+            w, h = int(size[0]), int(size[1])
+            if w >= 800 and h >= 400:
+                return geom
+        except (json.JSONDecodeError, OSError, ValueError, IndexError):
+            pass
+    return None
+
+
+def save_geometry(geometry):
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump({"geometry": geometry}, f, indent=2)
+
+
 class TaskApp:
-    def __init__(self, root):
+    def __init__(self, root, saved_geom=None):
         root.title("Task Manager")
-        root.geometry("1050x500")
         root.minsize(800, 400)
+
+        # Apply saved geometry or default
+        if saved_geom:
+            root.geometry(saved_geom)
+        else:
+            root.geometry("1050x500")
+
+        # Save geometry on window close
+        def on_close():
+            save_geometry(root.geometry())
+            root.destroy()
+
+        root.protocol("WM_DELETE_WINDOW", on_close)
 
         # Input row
         input_frame = Frame(root)
@@ -95,6 +131,10 @@ class TaskApp:
         table_frame = Frame(root)
         table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # Configure Treeview style with larger row height
+        style = Style()
+        style.configure("Treeview", rowheight=40)
+
         columns = ("status", "task", "priority", "due_date", "created")
         self.treeview = ttk.Treeview(
             table_frame, columns=columns, show="headings", selectmode="extended"
@@ -108,15 +148,21 @@ class TaskApp:
         self.treeview.heading("created", text="Created")
 
         self.treeview.column("status", width=50, anchor="center")
-        self.treeview.column("task", width=400, anchor="w")
-        self.treeview.column("priority", width=120, anchor="center")
-        self.treeview.column("due_date", width=130, anchor="center")
-        self.treeview.column("created", width=130, anchor="center")
+        self.treeview.column("task", width=500, anchor="w")
+        self.treeview.column("priority", width=130, anchor="center")
+        self.treeview.column("due_date", width=150, anchor="center")
+        self.treeview.column("created", width=140, anchor="center")
 
         # Scrollbars
-        v_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.treeview.yview)
-        h_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=self.treeview.xview)
-        self.treeview.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+        v_scroll = ttk.Scrollbar(
+            table_frame, orient="vertical", command=self.treeview.yview
+        )
+        h_scroll = ttk.Scrollbar(
+            table_frame, orient="horizontal", command=self.treeview.xview
+        )
+        self.treeview.configure(
+            yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set
+        )
 
         v_scroll.pack(side="right", fill="y")
         h_scroll.pack(side="bottom", fill="x")
@@ -156,7 +202,9 @@ class TaskApp:
             due = t.get("due_date")
             created = t.get("created", "")
 
-            priority_display = f"{PRIORITY_EMOJI.get(priority, '')} {priority.capitalize()}"
+            priority_display = (
+                f"{PRIORITY_EMOJI.get(priority, '')} {priority.capitalize()}"
+            )
 
             if due:
                 overdue_str = " ⚠️ OVERDUE" if not t["done"] and is_overdue(due) else ""
@@ -170,7 +218,8 @@ class TaskApp:
                 tag = priority
 
             self.treeview.insert(
-                "", "end",
+                "",
+                "end",
                 iid=str(t["id"]),
                 values=(status, t["text"], priority_display, due_display, created),
                 tags=(tag,),
@@ -245,7 +294,7 @@ class TaskApp:
 
 def main():
     root = Tk()
-    TaskApp(root)
+    TaskApp(root, saved_geom=load_geometry())
     root.mainloop()
 
 
